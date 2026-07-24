@@ -23,6 +23,7 @@ The project does not host, store, or redistribute media. It only retrieves metad
 
 - Python 3.10 or newer
 - Internet access for third-party provider requests
+- A TMDB API key or read access token for the public catalog
 
 ## Installation
 
@@ -31,6 +32,15 @@ git clone https://github.com/ibrahimdinzambou/Content-Nexora.git
 cd Content-Nexora
 python -m pip install -e .
 ```
+
+Configure TMDB on the VPS:
+
+```bash
+export TMDB_API_KEY="your_tmdb_api_key"
+# or: export TMDB_READ_ACCESS_TOKEN="your_tmdb_v4_read_token"
+```
+
+The catalog endpoint uses TMDB for films and series metadata, posters, backdrops, years, genres, and overviews. Stream availability still comes from the enabled providers.
 
 ## Start the API and player
 

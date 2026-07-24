@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from flask import Flask, Response, jsonify, render_template, request
 
 from autoflix_cli.scraping import anime_sama, arkanime, coflix, french_stream, player, wiflix
+from . import tmdb
 
 
 ROOT = Path(__file__).parent
@@ -138,6 +139,53 @@ def health():
 @app.get("/api/providers")
 def providers():
     return jsonify({"providers": [{"id": key, **{k: v for k, v in value.items() if k != "module"}} for key, value in PROVIDERS.items()]})
+
+
+@app.get("/api/catalog/items")
+def catalog_items():
+    """TMDB-backed catalog consumed by the Nexora web platform."""
+    try:
+        media_type = request.args.get("type", "movie").lower()
+        if media_type not in {"movie", "series"}:
+            return jsonify([])
+        limit = min(max(int(request.args.get("limit", "24")), 1), 100)
+        query = request.args.get("q", "").strip()
+        items = tmdb.search(query, media_type, limit) if query else tmdb.popular(media_type, limit)
+        return jsonify(items)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/api/catalog/items/<path:item_id>")
+def catalog_item(item_id: str):
+    try:
+        parts = item_id.split(":")
+        if len(parts) != 3 or parts[0] != "tmdb" or not parts[2].isdigit():
+            return jsonify({"error": "Expected a TMDB item id"}), 400
+        media_type = "series" if parts[1] in {"tv", "series"} else "movie"
+        return jsonify(tmdb.details(int(parts[2]), media_type))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/node-fr/api/catalog/items")
+def legacy_catalog_items():
+    """Compatibility path used by older Nexora web builds."""
+    return catalog_items()
+
+
+@app.get("/anime-api/api/v1/search")
+def legacy_anime_search():
+    """Compatibility path for the previous Anime-Nexora client."""
+    query = request.args.get("q", "").strip()
+    try:
+        raw = anime_sama.search(query) if query else []
+        data = [{"name": item.title, "url": item.url, "image_url": item.img, "genres": item.genres, "categories": ["Anime"], "languages": ["VF", "VOSTFR"]} for item in raw]
+        return jsonify({"count": len(data), "data": data[: min(int(request.args.get("limit", "12")), 100)]})
+    except Exception as exc:
+        return jsonify({"count": 0, "data": [], "error": str(exc)}), 503
 
 
 @app.get("/api/search")
