@@ -1,0 +1,54 @@
+diff --git a/src/main/resources/static/assets/app.js b/src/main/resources/static/assets/app.js
+--- a/src/main/resources/static/assets/app.js
++++ b/src/main/resources/static/assets/app.js
+@@ -514,8 +514,9 @@ async function animeNexoraItems(type, query, limit) {
+                 const seasonSlug = animeNexoraSlug(season.url);
+                 if (!seasonSlug) return null;
+                 const versionName = season.name || `Version ${index + 1}`;
+-                const versionImage = season.image_url || season.image || season.poster
+-                    || generatedPosterDataUrl(`${item.name} - ${versionName}`);
++                const versionImage = season.image_url || season.image || season.poster
++                    || item.image || item.poster || item.backdrop
++                    || generatedPosterDataUrl(`${item.name} - ${versionName}`);
+                 return {
+                     ...item,
+                     id: `anime-nexora~series~${encodeURIComponent(item.animeNexoraSlug)}~${encodeURIComponent(seasonSlug)}`,
+@@ -5241,14 +5242,14 @@ function handleAccountClick() {
+ }
+ 
+ function selectCatalogItem(item) {
++    if (item.type === "series" && !item.isEpisode) {
++        openSeries(item);
++        return;
++    }
+     if (isFrenchSource(item)) {
+         playItem(item);
+         return;
+     }
+-    if (item.type === "series" && !item.isEpisode) {
+-        openSeries(item);
+-        return;
+-    }
+     if (item.type === "movie") {
+         openMovieDetails(item);
+         return;
+@@ -5903,8 +5904,18 @@ async function playContentNexoraItem(item) {
+         if (!match?.url) {
+             throw new Error(`Content-Nexora n'a pas fourni de fiche exploitable pour « ${query} ».`);
+         }
++        const contentParameters = new URLSearchParams({
++            provider: CONTENT_NEXORA_PROVIDER,
++            url: match.url
++        });
++        const tmdbId = tmdbIdFromItem(activeItem);
++        if (tmdbId) contentParameters.set("tmdbId", String(tmdbId));
++        if (activeItem.type === "series") {
++            contentParameters.set("season", String(positiveInteger(activeItem.season) || 1));
++            contentParameters.set("episode", String(positiveInteger(activeItem.episode) || 1));
++        }
+         const contentPayload = await contentNexoraApi(
+-            `/content?provider=${encodeURIComponent(CONTENT_NEXORA_PROVIDER)}&url=${encodeURIComponent(match.url)}`
++            `/content?${contentParameters}`
+         );
+         const content = contentPayload.content || contentPayload;
+         if (activeItem.type === "movie" && !Array.isArray(content?.players)) {

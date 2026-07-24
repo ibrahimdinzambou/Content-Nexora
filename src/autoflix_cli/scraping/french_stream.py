@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 from .objects import (
     SearchResult,
     FrenchStreamMovie,
@@ -50,12 +51,12 @@ def search(query: str) -> list[SearchResult]:
         except AttributeError:
             break  # no results
 
-        link: str = (
-            website_origin
-            + result.attrs["onclick"].split("location.href='")[1].split("'")[0]
+        link: str = urljoin(
+            website_origin + "/",
+            result.attrs["onclick"].split("location.href='")[1].split("'")[0],
         )
         try:
-            img: str = website_origin + result.find("img").attrs["src"]
+            img: str = urljoin(website_origin + "/", result.find("img").attrs["src"])
         except AttributeError:
             img: str = ""  # no image
 
@@ -73,8 +74,9 @@ def get_movie(url: str, content: str) -> FrenchStreamMovie:
 
     img: str = ""
     try:
-        img: str = (
-            website_origin + soup.find("img", {"class": "dvd-thumbnail"}).attrs["src"]
+        img: str = urljoin(
+            website_origin + "/",
+            soup.find("img", {"class": "dvd-thumbnail"}).attrs["src"],
         )
     except AttributeError:
         img: str = ""

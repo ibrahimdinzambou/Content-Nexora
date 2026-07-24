@@ -4,6 +4,7 @@ from .objects import SearchResult, SamaSeason, SamaSeries, SeasonAccess, Episode
 from .utils import parse_episodes_from_js
 from ..proxy import DNS_OPTIONS
 from random import randint
+from urllib.parse import urljoin
 
 website_origin = ""
 
@@ -61,8 +62,8 @@ def search(query: str) -> list[SearchResult]:
             if is_scan_only:
                 continue
 
-            url: str = result.find("a").attrs["href"]
-            img: str = result.find("a").img.attrs["src"]
+            url: str = urljoin(response.url, result.find("a").attrs["href"])
+            img: str = urljoin(response.url, result.find("a").img.attrs["src"])
             info_block = result.find("div", {"class": "card-content"})
             title: str = info_block.h2.text
             genres: list[str] = info_block.find("p", {"class": info_class}).text.split(
@@ -116,9 +117,10 @@ def get_series(url: str) -> SamaSeries:
 
     img_container = soup.find("img", {"id": "coverOeuvre"})
     if img_container:
-        img: str = img_container.attrs["src"]
+        img: str = urljoin(response.url, img_container.attrs["src"])
     else:
-        img: str = None
+        og_image = soup.find("meta", {"property": "og:image"})
+        img: str = urljoin(response.url, og_image.attrs.get("content", "")) if og_image else ""
 
     genres: list[str] = []
 
@@ -141,7 +143,7 @@ def get_series(url: str) -> SamaSeries:
                     season_title = parts[0]
                     # The original logic assumes a specific JS structure
                     url_part = season.split('", "')[1].split('"')[0]
-                    season_url = url + "/" + url_part
+                    season_url = urljoin(url.rstrip("/") + "/", url_part.lstrip("/"))
                     seasons.append(SeasonAccess(season_title, season_url))
 
                 if season.endswith("/*"):

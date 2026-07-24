@@ -2,10 +2,16 @@
 
 Content Nexora is a local Python API and browser console for discovering and testing video streams from supported third-party providers.
 
-The current integration exposes two providers:
+The current integration exposes two discovery providers:
 
 - French-Stream
 - Anime-Sama
+
+It can also aggregate the providers exposed by the optional French Nexora Node API. Configure its base URL to load their film and series sources alongside Content-Nexora:
+
+```bash
+export FRENCH_NEXORA_API_BASE_URL="http://127.0.0.1:3000"
+```
 
 The project does not host, store, or redistribute media. It only retrieves metadata and stream links from third-party websites. Use it only where permitted by applicable law and by the provider's terms.
 
@@ -66,12 +72,21 @@ By default, the API accepts browser requests from `https://nexoragabon.com` and 
 | --- | --- |
 | `GET /api/health` | Service health check |
 | `GET /api/providers` | Enabled providers |
+| `GET /api/catalog/items?type=movie` | TMDB films or series using the Nexora front contract |
+| `GET /api/catalog/items/<tmdb-id>` | TMDB film or series details |
+| `GET /api/catalog/series/<tmdb-id>` | TMDB seasons and clickable episodes |
 | `GET /api/search?provider=french-stream&q=...` | Search titles |
 | `GET /api/content?provider=anime-sama&url=...` | Normalized film or series |
 | `GET /api/series?provider=anime-sama&url=...` | Series details and seasons |
 | `GET /api/season?provider=anime-sama&url=...` | Episodes grouped by language |
 | `GET /api/episode?provider=french-stream&url=...` | Episode players |
+| `GET /api/node/providers` | French Nexora Node providers |
+| `GET /api/node/streams?tmdbId=...&mediaType=...` | Normalized Node provider streams |
 | `POST /api/resolve` | Resolve a player URL into a stream URL |
+
+The Node routes are also available below `/node-fr/api/...` for older Nexora front builds. For TV series, pass both `season` and `episode`; `/api/content` accepts the same parameters plus `tmdbId` and merges the Node sources into the selected episode.
+
+The companion [`nexoragabon-front.patch`](nexoragabon-front.patch) fixes the main Nexora front click order, forwards the TMDB/episode context needed to merge Node sources, and preserves Anime-Nexora artwork when a season does not provide its own image.
 
 Example request:
 
