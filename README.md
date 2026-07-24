@@ -48,6 +48,8 @@ $env:AUTOFLIX_PORT="8787"
 autoflix-api
 ```
 
+By default, the API accepts browser requests from `https://nexoragabon.com` and `https://www.nexoragabon.com`. For another deployment, configure the comma-separated `AUTOFLIX_ALLOWED_ORIGINS` variable.
+
 ## API endpoints
 
 | Endpoint | Description |

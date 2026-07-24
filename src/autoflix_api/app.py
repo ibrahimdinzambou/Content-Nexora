@@ -14,6 +14,29 @@ from autoflix_cli.scraping import anime_sama, arkanime, coflix, french_stream, p
 ROOT = Path(__file__).parent
 app = Flask(__name__, template_folder=str(ROOT / "templates"), static_folder=str(ROOT / "static"))
 
+DEFAULT_ALLOWED_ORIGINS = {
+    "https://nexoragabon.com",
+    "https://www.nexoragabon.com",
+}
+ALLOWED_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("AUTOFLIX_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+} or DEFAULT_ALLOWED_ORIGINS
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Allow the production site and its www variant to call the API."""
+    origin = request.headers.get("Origin", "").rstrip("/")
+    if origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        response.headers["Access-Control-Max-Age"] = "86400"
+        response.headers["Vary"] = "Origin"
+    return response
+
 PROVIDERS = {
     "french-stream": {"label": "French-Stream", "module": french_stream, "languages": ["fr"]},
     "anime-sama": {"label": "Anime-Sama", "module": anime_sama, "languages": ["fr"]},
