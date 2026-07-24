@@ -52,3 +52,15 @@ diff --git a/src/main/resources/static/assets/app.js b/src/main/resources/static
          );
          const content = contentPayload.content || contentPayload;
          if (activeItem.type === "movie" && !Array.isArray(content?.players)) {
+diff --git a/src/main/resources/static/watch.html b/src/main/resources/static/watch.html
+--- a/src/main/resources/static/watch.html
++++ b/src/main/resources/static/watch.html
+@@ -731,7 +731,7 @@
+ <script src="/assets/runtime-config.js?v=20260724-anime-content-routing-1" defer></script>
+ <script src="/assets/vendor/mpegts.js" defer></script>
+ <script src="/assets/vendor/hls.min.js" defer></script>
+ <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js" defer></script>
+-<script src="/assets/app.js?v=20260724-content-series-1" defer></script>
++<script src="/assets/app.js?v=20260725-providers-series-artwork-1" defer></script>
+ </body>
+ </html>
