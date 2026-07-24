@@ -30,6 +30,7 @@ Repository = "https://github.com/PaulExplorer/autoflix-cli.git"
 
 [project.scripts]
 autoflix = "autoflix_cli.main:main"
+autoflix-api = "autoflix_api.app:main"
 
 [build-system]
 requires = ["hatchling"]

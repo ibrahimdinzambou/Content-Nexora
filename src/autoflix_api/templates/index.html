@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoFlix / Signal Desk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <div class="grain"></div>
+  <main class="shell">
+    <header class="topbar"><div class="brand"><span class="mark">AF</span><span>AUTOFLIX <em>/ SIGNAL DESK</em></span></div><span class="status"><i></i> LOCAL TEST CONSOLE</span></header>
+    <section class="hero"><p class="eyebrow">STREAM DISCOVERY / 01</p><h1>Find the signal.<br><span>Test the stream.</span></h1><p class="lede">Une console locale pour chercher un titre, inspecter ses sources et lancer un flux directement dans le navigateur.</p></section>
+    <section class="workspace">
+      <div class="controls card"><div class="section-label">01 — DISCOVERY</div><label for="provider">Source</label><select id="provider"></select><label for="query">Titre à chercher</label><div class="search-row"><input id="query" placeholder="ex. Solo Leveling" autocomplete="off"><button id="search">CHERCHER <span>↗</span></button></div><p id="message" class="message">Prêt à scanner les providers.</p><div id="results" class="results"></div></div>
+      <div class="player card"><div class="player-head"><div><div class="section-label">02 — PLAYBACK MONITOR</div><h2 id="now-playing">Aucun signal sélectionné</h2></div><span id="format" class="pill">IDLE</span></div><div class="screen"><video id="video" controls playsinline></video><div id="screen-empty" class="screen-empty"><span class="crosshair">＋</span><strong>NO SIGNAL</strong><small>Sélectionnez une source puis résolvez un lecteur</small></div></div><div class="source-row"><input id="player-url" placeholder="URL du lecteur (https://…)" spellcheck="false"><button id="resolve">RÉSOUDRE</button></div><div id="resolved" class="resolved"></div></div>
+    </section>
+    <footer><span>AutoFlix API</span><span>Endpoints JSON · lecteur HLS / vidéo</span><a href="/api/health">API STATUS ↗</a></footer>
+  </main><script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script><script src="{{ url_for('static', filename='app.js') }}"></script>
+</body></html>

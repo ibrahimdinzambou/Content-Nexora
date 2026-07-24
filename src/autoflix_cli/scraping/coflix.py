@@ -28,9 +28,9 @@ def get_website_url(portal=portals["coflix"]):
         return
 
     if portal.startswith("http"):
-        response = scraper.head(portal)
+        response = scraper.head(portal, timeout=12)
     else:
-        response = scraper.head("https://" + portal)
+        response = scraper.head("https://" + portal, timeout=12)
     response.raise_for_status()
 
     website_origin = response.url
@@ -39,7 +39,7 @@ def get_website_url(portal=portals["coflix"]):
 def search(query: str) -> list[SearchResult]:
     page = website_origin + f"/suggest.php?query={query}"
 
-    response = scraper.get(page)
+    response = scraper.get(page, timeout=15)
     response.raise_for_status()
     response = response.json()
 
