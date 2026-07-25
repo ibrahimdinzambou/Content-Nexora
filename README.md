@@ -86,7 +86,7 @@ By default, the API accepts browser requests from `https://nexoragabon.com` and 
 
 The Node routes are also available below `/node-fr/api/...` for older Nexora front builds. For TV series, pass both `season` and `episode`; `/api/content` accepts the same parameters plus `tmdbId` and merges the Node sources into the selected episode.
 
-The companion [`nexoragabon-front.patch`](nexoragabon-front.patch) fixes the main Nexora front click order, forwards the TMDB/episode context needed to merge Node sources, and preserves Anime-Nexora artwork when a season does not provide its own image.
+The companion [`nexoragabon-front.patch`](nexoragabon-front.patch) fixes the main Nexora front click order, forwards the TMDB/episode context needed to merge Node sources, and preserves Anime-Nexora artwork when a season does not provide its own image. Apply [`nexoragabon-front-episode-title.patch`](nexoragabon-front-episode-title.patch) afterwards so episode playback searches Content-Nexora with the parent series title instead of the episode display name.
 
 Example request:
 
