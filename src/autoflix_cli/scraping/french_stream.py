@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import re
 from urllib.parse import urljoin
 from .objects import (
     SearchResult,
@@ -97,9 +98,12 @@ def get_movie(url: str, content: str) -> FrenchStreamMovie:
 
     movie_info = movie_info_response.json()
 
-    for player_name, player_links in movie_info["players"].items():
+    for player_name, player_links in (movie_info.get("players") or {}).items():
+        if not isinstance(player_links, dict):
+            continue
         for lang, link in player_links.items():
-            players.append(Player(player_name + " " + lang, link))
+            if link:
+                players.append(Player(player_name + " " + lang, urljoin(website_origin + "/", link)))
 
     return FrenchStreamMovie(title, url, img, genres, players)
 
@@ -135,13 +139,24 @@ def get_series_season(url: str, content: str) -> FrenchStreamSeason:
 
 
 def get_episodes_from_lang(lang: str, serie_info: dict):
-    episodes_raw = serie_info[lang]
+    episodes_raw = serie_info.get(lang) or {}
     episodes: list[Episode] = []
 
-    for number, players_raw in episodes_raw.items():
+    if isinstance(episodes_raw, list):
+        episodes_raw = {str(index): value for index, value in enumerate(episodes_raw, 1)}
+    if not isinstance(episodes_raw, dict):
+        return episodes
+
+    def episode_sort_key(value):
+        match = re.search(r"\d+", str(value[0]))
+        return int(match.group()) if match else 10_000
+
+    for number, players_raw in sorted(episodes_raw.items(), key=episode_sort_key):
         players: list[Player] = []
-        for player_name, link in players_raw.items():
-            players.append(Player(player_name, link))
+        if isinstance(players_raw, dict):
+            for player_name, link in players_raw.items():
+                if link:
+                    players.append(Player(player_name, urljoin(website_origin + "/", link)))
 
         episode = Episode(f"Episode {number}", players)
         episodes.append(episode)

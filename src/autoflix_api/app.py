@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from hashlib import sha1
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -31,6 +32,9 @@ ALLOWED_ORIGINS = {
 @app.after_request
 def add_cors_headers(response):
     """Allow the production site and its www variant to call the API."""
+    cors_mode = os.getenv("AUTOFLIX_CORS_MODE", "application").strip().lower()
+    if cors_mode in {"off", "proxy", "nginx"}:
+        return response
     origin = request.headers.get("Origin", "").rstrip("/")
     if origin in ALLOWED_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -61,18 +65,21 @@ def serialize(value: Any) -> Any:
     return str(value)
 
 
-def _players(value: Any) -> list[dict]:
+def _players(value: Any, base_url: str = "") -> list[dict]:
     if not value:
         return []
-    return [
-        {
-            "name": getattr(item, "name", "Source vidéo"),
-            "label": getattr(item, "name", "Source vidéo"),
-            "url": getattr(item, "url", ""),
-        }
-        for item in value
-        if getattr(item, "url", "")
-    ]
+    players = []
+    for item in value:
+        if isinstance(item, dict):
+            raw_url = item.get("url") or item.get("link") or item.get("embedUrl") or ""
+            name = item.get("name") or item.get("label") or item.get("title") or "Source vidéo"
+        else:
+            raw_url = getattr(item, "url", "")
+            name = getattr(item, "name", "Source vidéo")
+        url = normalize_image_url(raw_url, base_url)
+        if url:
+            players.append({"name": name, "label": name, "url": url})
+    return players
 
 
 def normalize_image_url(value: Any, base_url: str = "") -> str:
@@ -146,7 +153,7 @@ def normalize_content(value: Any, provider_name: str = "") -> dict:
     """Expose a stable media tree regardless of the scraper's internal class."""
     kind = value.__class__.__name__
     if kind in {"FrenchStreamMovie", "CoflixMovie", "WiflixMovie"}:
-        players = _players(value.players)
+        players = _players(value.players, getattr(value, "url", ""))
         return {
             **_media_fields(
                 provider_name,
@@ -161,7 +168,7 @@ def normalize_content(value: Any, provider_name: str = "") -> dict:
             "sources": players,
         }
     if kind == "FrenchStreamSeason":
-        season_number = _number_from_text(value.title, 1)
+        season_number = _season_number_from_text(value.title, 1)
         episodes = normalize_episodes(value.episodes, provider_name, season_number)
         episode_count = max((len(items) for items in episodes.values()), default=0)
         return {
@@ -181,7 +188,7 @@ def normalize_content(value: Any, provider_name: str = "") -> dict:
     if kind in {"SamaSeries", "CoflixSeries", "ArkSeries"}:
         seasons = []
         for index, season in enumerate(getattr(value, "seasons", []), 1):
-            season_number = _number_from_text(getattr(season, "title", ""), index)
+            season_number = _season_number_from_text(getattr(season, "title", ""), index)
             episodes = normalize_episodes(getattr(season, "episodes", {}), provider_name, season_number) if hasattr(season, "episodes") else {}
             episode_count = max((len(items) for items in episodes.values()), default=0)
             seasons.append({
@@ -202,7 +209,7 @@ def normalize_content(value: Any, provider_name: str = "") -> dict:
             "seasons": seasons,
         }
     if kind in {"SamaSeason", "CoflixSeason", "WiflixSeriesSeason"}:
-        season_number = _number_from_text(value.title, 1)
+        season_number = _season_number_from_text(value.title, 1)
         episodes = normalize_episodes(value.episodes, provider_name, season_number)
         return {
             "type": "season",
@@ -231,6 +238,11 @@ def normalize_content(value: Any, provider_name: str = "") -> dict:
 def _number_from_text(value: Any, fallback: int) -> int:
     match = re.search(r"\d+", str(value or ""))
     return int(match.group()) if match else fallback
+
+
+def _season_number_from_text(value: Any, fallback: int) -> int:
+    match = re.search(r"(?:saison|season|\bs)\s*[-.:]?\s*(\d+)", str(value or ""), re.IGNORECASE)
+    return int(match.group(1)) if match else fallback
 
 
 def normalize_episodes(episodes: Any, provider_name: str = "", season_number: int = 1) -> dict:
@@ -281,7 +293,9 @@ def call_provider(provider_name: str, operation: str, url: str | None = None, qu
             return module.get_content(url or "")
         return module.get_series(url or "")
     if operation == "series":
-        return module.get_series(url or "")
+        if hasattr(module, "get_series"):
+            return module.get_series(url or "")
+        return module.get_content(url or "")
     if operation == "season":
         return module.get_season(url or "")
     if operation == "episode":
@@ -293,7 +307,11 @@ def normalize_search_result(value: Any, provider_name: str) -> dict[str, Any]:
     raw_title = str(getattr(value, "title", "") or "").strip()
     url = str(getattr(value, "url", "") or "").strip()
     is_series = provider_name == "anime-sama" or bool(
-        re.search(r"(?:\bsaison\b|\bseason\b|\bepisode\b|/s-tv/)", f"{raw_title} {url}", re.IGNORECASE)
+        re.search(
+            r"(?:\bsaison\b|\bseason\b|\bepisode\b|/(?:s-tv|series?|serie|tv-shows?)/)",
+            f"{raw_title} {url}",
+            re.IGNORECASE,
+        )
     )
     if provider_name == "anime-sama" and re.search(r"/(?:film|movie)(?:/|$)", url, re.IGNORECASE):
         is_series = False
@@ -306,6 +324,66 @@ def normalize_search_result(value: Any, provider_name: str) -> dict[str, Any]:
         getattr(value, "img", ""),
         getattr(value, "genres", []),
     )
+
+
+def _search_key(value: Any) -> str:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    text = "".join(character for character in text if unicodedata.category(character) != "Mn")
+    text = re.sub(r"\s*[-–—:|·]\s*(?:saison|season)\s*\d+.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:saison|season)\s*\d+.*$", "", text, flags=re.IGNORECASE)
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _select_provider_result(
+    values: Any,
+    provider_name: str,
+    query: str,
+    media_type: str,
+    season_number: int,
+) -> tuple[Any, dict[str, Any]]:
+    requested_type = "series" if media_type in {"series", "tv"} else "movie"
+    query_key = _search_key(query)
+    ranked = []
+    for index, value in enumerate(values or []):
+        normalized = normalize_search_result(value, provider_name)
+        candidate_key = _search_key(normalized.get("title"))
+        candidate_season = _season_number_from_text(normalized.get("title"), 0)
+        score = 0
+        if normalized.get("type") == requested_type:
+            score += 100
+        if query_key and candidate_key == query_key:
+            score += 80
+        elif query_key and (query_key in candidate_key or candidate_key in query_key):
+            score += 40
+        if requested_type == "series" and season_number:
+            score += 30 if candidate_season == season_number else 0
+        ranked.append((score, -index, value, normalized))
+    if not ranked:
+        raise ValueError(f"No {provider_name} result found for {query}")
+    _, _, selected, normalized = max(ranked, key=lambda entry: (entry[0], entry[1]))
+    return selected, normalized
+
+
+def _requested_content(provider_name: str, operation: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    url = request.args.get("url", "").strip()
+    match = None
+    if not url:
+        query = (request.args.get("q") or request.args.get("title") or "").strip()
+        if len(query) < 2:
+            raise ValueError("url or a title/query of at least 2 characters is required")
+        media_type = (request.args.get("mediaType") or request.args.get("type") or "movie").lower()
+        season_number = int(request.args.get("season", "1") or 1)
+        selected, match = _select_provider_result(
+            call_provider(provider_name, "search", query=query),
+            provider_name,
+            query,
+            media_type,
+            season_number,
+        )
+        url = str(getattr(selected, "url", "") or match.get("url") or "").strip()
+    normalized = normalize_content(call_provider(provider_name, operation, url=url), provider_name)
+    normalized.setdefault("url", url)
+    return normalized, match
 
 
 def _merge_node_sources(content: dict[str, Any]) -> dict[str, Any]:
@@ -539,8 +617,13 @@ def search():
 def content():
     try:
         provider_name = request.args["provider"].lower()
-        normalized = normalize_content(call_provider(provider_name, "content", url=request.args["url"]), provider_name)
-        return jsonify({"content": _merge_node_sources(normalized)})
+        normalized, match = _requested_content(provider_name, "content")
+        payload = {"content": _merge_node_sources(normalized)}
+        if match:
+            payload["match"] = match
+        return jsonify(payload)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -549,8 +632,13 @@ def content():
 def series():
     try:
         provider_name = request.args["provider"].lower()
-        normalized = normalize_content(call_provider(provider_name, "series", url=request.args["url"]), provider_name)
-        return jsonify({"content": _merge_node_sources(normalized)})
+        normalized, match = _requested_content(provider_name, "series")
+        payload = {"content": _merge_node_sources(normalized)}
+        if match:
+            payload["match"] = match
+        return jsonify(payload)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -583,10 +671,27 @@ def resolve():
         referer = str(payload.get("referer", "https://autoflix.local/"))
         stream_url, subtitle_url = player.get_hls_link(player_url, headers={"Referer": referer}, return_subs=True)
         if not stream_url:
-            return jsonify({"error": "No compatible stream found for this player URL"}), 404
-        return jsonify({"stream_url": stream_url, "subtitle_url": subtitle_url, "kind": "hls" if ".m3u8" in stream_url.lower() else "video"})
+            return jsonify({
+                "stream_url": player_url,
+                "embed_url": player_url,
+                "subtitle_url": subtitle_url,
+                "kind": "embed",
+                "resolved": False,
+            })
+        return jsonify({
+            "stream_url": stream_url,
+            "subtitle_url": subtitle_url,
+            "kind": "hls" if ".m3u8" in stream_url.lower() else "video",
+            "resolved": True,
+        })
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 502
+        return jsonify({
+            "stream_url": player_url,
+            "embed_url": player_url,
+            "kind": "embed",
+            "resolved": False,
+            "resolutionError": str(exc),
+        })
 
 
 def main():

@@ -22,7 +22,7 @@ The project does not host, store, or redistribute media. It only retrieves metad
 - Explicit content types: `movie`, `series`, `season`, and `episode`.
 - Series navigation by season, language, episode, and player.
 - HLS and direct video playback in a local browser console.
-- Player URL resolution with clear errors for expired or unavailable sources.
+- Player URL resolution with an embed fallback when direct HLS extraction is unavailable.
 - Local-only server by default.
 
 ## Requirements
@@ -46,7 +46,7 @@ export TMDB_API_KEY="your_tmdb_api_key"
 # or: export TMDB_READ_ACCESS_TOKEN="your_tmdb_v4_read_token"
 ```
 
-The catalog endpoint uses TMDB for films and series metadata, posters, backdrops, years, genres, and overviews. Stream availability still comes from the enabled providers.
+The catalog endpoint uses TMDB for films and series metadata, posters, backdrops, years, genres, and overviews. Playback is attempted through Content-Nexora and the optional Node providers first; Videasy remains a fallback.
 
 ## Start the API and player
 
@@ -64,7 +64,7 @@ $env:AUTOFLIX_PORT="8787"
 autoflix-api
 ```
 
-By default, the API accepts browser requests from `https://nexoragabon.com` and `https://www.nexoragabon.com`. For another deployment, configure the comma-separated `AUTOFLIX_ALLOWED_ORIGINS` variable.
+By default, the API accepts browser requests from `https://nexoragabon.com` and `https://www.nexoragabon.com`. For another deployment, configure the comma-separated `AUTOFLIX_ALLOWED_ORIGINS` variable. If Nginx already emits the CORS headers, set `AUTOFLIX_CORS_MODE=nginx` so only one layer adds them.
 
 ## API endpoints
 
@@ -76,17 +76,23 @@ By default, the API accepts browser requests from `https://nexoragabon.com` and 
 | `GET /api/catalog/items/<tmdb-id>` | TMDB film or series details |
 | `GET /api/catalog/series/<tmdb-id>` | TMDB seasons and clickable episodes |
 | `GET /api/search?provider=french-stream&q=...` | Search titles |
-| `GET /api/content?provider=anime-sama&url=...` | Normalized film or series |
-| `GET /api/series?provider=anime-sama&url=...` | Series details and seasons |
+| `GET /api/content?provider=french-stream&q=...&type=...` | Resolve a title or TMDB title through Content-Nexora |
+| `GET /api/content?provider=anime-sama&url=...` | Normalized film or series by provider URL |
+| `GET /api/series?provider=french-stream&q=...&season=...` | Series details, episodes, and players by title |
+| `GET /api/series?provider=anime-sama&url=...` | Series details and seasons by provider URL |
 | `GET /api/season?provider=anime-sama&url=...` | Episodes grouped by language |
 | `GET /api/episode?provider=french-stream&url=...` | Episode players |
 | `GET /api/node/providers` | French Nexora Node providers |
 | `GET /api/node/streams?tmdbId=...&mediaType=...` | Normalized Node provider streams |
 | `POST /api/resolve` | Resolve a player URL into a stream URL |
 
-The Node routes are also available below `/node-fr/api/...` for older Nexora front builds. For TV series, pass both `season` and `episode`; `/api/content` accepts the same parameters plus `tmdbId` and merges the Node sources into the selected episode.
+The Node routes are also available below `/node-fr/api/...` for older Nexora front builds. For TV series, pass both `season` and `episode`; `/api/content` and `/api/series` accept a provider URL or a `q`/`title`, plus `tmdbId`, and merge the Node sources into the selected episode.
 
-The companion [`nexoragabon-front.patch`](nexoragabon-front.patch) fixes the main Nexora front click order, forwards the TMDB/episode context needed to merge Node sources, and preserves Anime-Nexora artwork when a season does not provide its own image. Apply [`nexoragabon-front-episode-title.patch`](nexoragabon-front-episode-title.patch) afterwards so episode playback searches Content-Nexora with the parent series title instead of the episode display name.
+Apply the companion patches in this order:
+
+1. [`nexoragabon-front.patch`](nexoragabon-front.patch) fixes the series click order and Anime-Nexora artwork.
+2. [`nexoragabon-front-episode-title.patch`](nexoragabon-front-episode-title.patch) keeps the parent series title during episode playback.
+3. [`nexoragabon-front-content-tmdb-playback.patch`](nexoragabon-front-content-tmdb-playback.patch) routes TMDB and Content series through Content-Nexora first and keeps valid embed players when direct extraction is unavailable.
 
 Example request:
 

@@ -8,8 +8,10 @@ from curl_cffi import requests
 
 TMDB_API = "https://api.themoviedb.org/3"
 TMDB_IMAGE = "https://image.tmdb.org/t/p"
-PLAYBACK_PROVIDER = "videasy"
-PLAYBACK_PROVIDER_NAME = "Videasy"
+PLAYBACK_PROVIDER = "content-nexora"
+PLAYBACK_PROVIDER_NAME = "Content-Nexora"
+FALLBACK_PLAYBACK_PROVIDER = "videasy"
+FALLBACK_PLAYBACK_PROVIDER_NAME = "Videasy"
 
 
 def _request(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -75,6 +77,9 @@ def _playback_fields() -> dict[str, Any]:
         "provider": "tmdb",
         "playbackProvider": PLAYBACK_PROVIDER,
         "playbackProviderName": PLAYBACK_PROVIDER_NAME,
+        "fallbackPlaybackProvider": FALLBACK_PLAYBACK_PROVIDER,
+        "fallbackPlaybackProviderName": FALLBACK_PLAYBACK_PROVIDER_NAME,
+        "availableProviders": [PLAYBACK_PROVIDER, FALLBACK_PLAYBACK_PROVIDER],
         "metadataAvailable": True,
         "streamAvailable": True,
         "externalPlayback": True,

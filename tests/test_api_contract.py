@@ -28,7 +28,8 @@ class TmdbContractTests(unittest.TestCase):
         self.assertEqual("tmdb~movie~603", item["id"])
         self.assertEqual("TMDB", item["source"])
         self.assertEqual("tmdb", item["sourceCode"])
-        self.assertEqual("videasy", item["playbackProvider"])
+        self.assertEqual("content-nexora", item["playbackProvider"])
+        self.assertEqual("videasy", item["fallbackPlaybackProvider"])
         self.assertEqual(603, item["tmdbId"])
         self.assertTrue(item["streamAvailable"])
         self.assertEqual("https://image.tmdb.org/t/p/w500/poster.jpg", item["poster"])
@@ -55,7 +56,8 @@ class TmdbContractTests(unittest.TestCase):
         self.assertEqual("tmdb~series~1399~s~1~e~1", episodes[0]["id"])
         self.assertEqual(1, episodes[0]["season"])
         self.assertEqual(1, episodes[0]["episode"])
-        self.assertEqual("videasy", episodes[0]["playbackProvider"])
+        self.assertEqual("content-nexora", episodes[0]["playbackProvider"])
+        self.assertEqual("videasy", episodes[0]["fallbackPlaybackProvider"])
 
     def test_current_and_legacy_tmdb_ids_are_accepted(self):
         self.assertEqual((603, "movie"), tmdb.parse_public_id("tmdb~movie~603"))
@@ -108,10 +110,69 @@ class ContentContractTests(unittest.TestCase):
         self.assertEqual("vf", episode["language"])
         self.assertEqual("vf", episode["players"][0]["language"])
 
+    def test_series_number_does_not_use_a_number_from_the_title(self):
+        remote = FrenchStreamSeason(
+            "1923 - Saison 2",
+            "https://french-stream.one/1923-saison-2.html",
+            {"vf": [Episode("Episode 1", [Player("Source VF", "https://video.test/embed")])]},
+        )
+
+        content = normalize_content(remote, "french-stream")
+
+        self.assertEqual(2, content["seasons"][0]["season"])
+
+    @patch("autoflix_api.app.call_provider")
+    def test_content_can_resolve_a_tmdb_title_and_requested_season(self, provider_mock):
+        provider_mock.side_effect = [
+            [
+                SearchResult("FROM - Saison 1", "https://french-stream.one/from-s1.html", "", []),
+                SearchResult("FROM - Saison 2", "https://french-stream.one/from-s2.html", "", []),
+            ],
+            FrenchStreamSeason(
+                "FROM - Saison 2",
+                "https://french-stream.one/from-s2.html",
+                {"vf": [Episode("Episode 1", [Player("Source VF", "/embed/from-s2-e1")])]},
+            ),
+        ]
+
+        response = self.client.get(
+            "/api/content?provider=french-stream&q=FROM&type=series&season=2&episode=1&tmdbId=124364"
+        )
+
+        self.assertEqual(200, response.status_code)
+        body = response.get_json()
+        self.assertEqual("https://french-stream.one/from-s2.html", body["match"]["url"])
+        self.assertEqual(2, body["content"]["seasons"][0]["season"])
+
+    @patch("autoflix_api.app.player.get_hls_link", return_value=(None, None))
+    def test_unresolved_player_remains_available_as_an_embed(self, resolver_mock):
+        response = self.client.post(
+            "/api/resolve",
+            json={
+                "player_url": "https://hoster.test/embed/episode-1",
+                "referer": "https://french-stream.one/",
+            },
+        )
+
+        self.assertEqual(200, response.status_code)
+        body = response.get_json()
+        self.assertEqual("embed", body["kind"])
+        self.assertEqual("https://hoster.test/embed/episode-1", body["stream_url"])
+        self.assertFalse(body["resolved"])
+
     def test_provider_response_exposes_content_and_node_services(self):
         body = self.client.get("/api/providers").get_json()
         ids = {provider["id"] for provider in body["playbackProviders"]}
         self.assertEqual({"content-nexora", "french-nexora-node"}, ids)
+
+    def test_application_cors_can_be_disabled_when_nginx_owns_it(self):
+        with patch.dict(os.environ, {"AUTOFLIX_CORS_MODE": "nginx"}, clear=False):
+            response = self.client.get(
+                "/api/health",
+                headers={"Origin": "https://www.nexoragabon.com"},
+            )
+
+        self.assertNotIn("Access-Control-Allow-Origin", response.headers)
 
     def test_node_routes_report_disabled_configuration_cleanly(self):
         with patch.dict(os.environ, {"FRENCH_NEXORA_API_BASE_URL": ""}, clear=False):
